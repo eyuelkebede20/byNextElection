@@ -1,12 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Lexend:wght@100;200;300;400;500;600;700;800;900&display=swap");
 @import "tailwindcss";
 
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
-
 :root {
-
   --radius: 0rem;
 
   --color-forest-50: oklch(88.53% 0.00658 197.86);
@@ -169,11 +167,8 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-
   --font-*: initial;
   --font-sans: Lexend, sans-serif;
-
-
 }
 
 @layer base {
