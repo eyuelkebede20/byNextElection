@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <meta name="viewport" content="width=device-width" />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.theme;
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (stored === 'dark' || (!stored && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+    %sveltekit.head%
+
+    <meta
+      name="description"
+      content="Write one message, seal it for five years, and open it when the next election comes around."
+    />
+    <meta property="og:title" content="Till Next Election" />
+    <meta
+      property="og:description"
+      content="Write one message, seal it for five years, and open it when the next election comes around."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Till Next Election" />
+
+    <title>Till Next Election</title>
+  </head>
+
+  <body data-sveltekit-preload-data="hover" class="relative">
+    <svg class="absolute">
+      <filter id="grain">
+        <feTurbulence type="turbulence" baseFrequency="0.69" />
+      </filter>
+    </svg>
+
+    <div style="display: contents">%sveltekit.body%</div>
+  </body>
+
+  <style>
+    body {
+      position: relative;
+    }
+
+    body::before,
+    body::after {
+      position: absolute;
+      filter: url(#grain);
+      left: 0;
+      top: 0;
+      content: '';
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+      opacity: 18%;
+      filter: contrast(150%) brightness(300%);
+      pointer-events: none;
+    }
+
+    body::before {
+      filter: url(#grain);
+    }
+  </style>
+</html>
