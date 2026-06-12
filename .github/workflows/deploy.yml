@@ -59,9 +59,11 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           port: ${{ secrets.FTP_PORT || 21 }}
-          # Plain FTP unless an FTP_PROTOCOL secret says otherwise (e.g. "ftps"
-          # if the host enforces TLS). Default matches the earlier working runs.
-          protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+          # Default to explicit FTPS (AUTH TLS on port 21) so the password and
+          # payload aren't sent in cleartext. Override with an FTP_PROTOCOL=ftp
+          # secret only if the host doesn't support FTPS and a deploy fails on a
+          # TLS handshake error.
+          protocol: ${{ secrets.FTP_PROTOCOL || 'ftps' }}
           # Be patient with a busy/throttling cPanel control socket (default 30s).
           timeout: 120000
           local-dir: ./deploy/
