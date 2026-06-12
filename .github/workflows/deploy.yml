@@ -12,6 +12,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # FTP_SERVER / FTP_USERNAME / FTP_PASSWORD live in this GitHub Environment,
+    # so the job must declare it to read them (otherwise secrets.* are empty).
+    environment: ByNextElection
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
