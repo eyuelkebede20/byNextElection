@@ -50,7 +50,9 @@ cPanel → **Setup Node.js Application** → **Create Application**:
 - **Application root:** _must be the same directory the deploy uploads into._ This is the single most
   common failure point — see the box below.
 - **Application URL:** `bynextelection.senaycreatives.com`
-- **Application startup file:** `build/index.js`  ← **not** the default `app.js`
+- **Application startup file:** `app.cjs`  ← **not** the default `app.js`, and **not** `build/index.js`
+  directly. `app.cjs` is a CommonJS launcher we ship that dynamically imports the ESM server
+  (`build/index.js`) — cPanel/LiteSpeed Passenger can't start an ESM entry file directly.
 
 > ### ⚠️ "It works! NodeJS 22.x" is showing instead of the app
 > That page is the **default starter app** (`app.js`) cPanel scaffolds — Passenger is running, but it's
@@ -62,10 +64,10 @@ cPanel → **Setup Node.js Application** → **Create Application**:
 > 3. **Make these two paths the same.** Easiest: set the app's **Application Root** to the folder that
 >    already contains the uploaded `build/`. (Alternatively, set the `FTP_SERVER_DIR` secret to the
 >    Application Root path and re-run the workflow.)
-> 4. Set **Application startup file** → `build/index.js`, then **Restart** the app.
+> 4. Set **Application startup file** → `app.cjs`, then **Restart** the app.
 >
-> After this, the Application Root should contain: `build/`, `package.json`, `package-lock.json`,
-> `tmp/`. You can delete cPanel's leftover sample `app.js`.
+> After this, the Application Root should contain: `app.cjs`, `build/`, `package.json`,
+> `package-lock.json`, `tmp/`. You can delete cPanel's leftover sample `app.js`.
 
 > ### ⚠️ Do NOT keep a real `node_modules` folder in the Application Root
 > CloudLinux **Node.js Selector** manages `node_modules` as a **symlink** into the app's virtual
@@ -77,6 +79,17 @@ cPanel → **Setup Node.js Application** → **Create Application**:
 > FTP. If you ran it, a stray real `node_modules/` folder may be sitting in the Application Root —
 > **delete it** in File Manager (keep `build/`, `package.json`, `package-lock.json`, `tmp/`). Leave any
 > `node_modules` **symlink** that CloudLinux itself created.
+
+> ### ⚠️ A **503 Service Unavailable** means the Node app crashed on startup
+> Passenger is now pointed at the app, but the process won't boot. Check, in order:
+> 1. **Application startup file = `app.cjs`** (not `build/index.js`, not `app.js`). Starting the ESM
+>    `build/index.js` directly is the usual cause of a boot crash.
+> 2. **Read the error log.** In the Node.js App screen click **"Open"** next to the log, or in **File
+>    Manager** open `stderr.log` in the Application Root — the last lines show the real stack trace.
+> 3. Make sure `app.cjs`, `build/`, and our `package.json` (which has `"type": "module"`) are all in the
+>    Application Root. If a *different* `package.json` without `"type": "module"` is there, `build/index.js`
+>    is parsed as CommonJS and throws on `import` — delete the stale one and redeploy.
+> 4. **Restart** after any change.
 
 ## 3. Environment variables (set in the Node.js App UI → "Environment variables")
 
