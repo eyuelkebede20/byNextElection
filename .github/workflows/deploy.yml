@@ -54,6 +54,12 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT || 21 }}
+          # Plain FTP unless an FTP_PROTOCOL secret says otherwise (e.g. "ftps"
+          # if the host enforces TLS). Default matches the earlier working runs.
+          protocol: ${{ secrets.FTP_PROTOCOL || 'ftp' }}
+          # Be patient with a busy/throttling cPanel control socket (default 30s).
+          timeout: 120000
           local-dir: ./deploy/
           # Land exactly in the cPanel Node app's "Application Root" (where
           # Passenger runs build/index.js). Set FTP_SERVER_DIR to that path;
