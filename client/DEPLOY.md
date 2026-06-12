@@ -15,14 +15,16 @@ one cPanel **Passenger Node app** on **`bynextelection.senaycreatives.com`**. Th
 
 `.github/workflows/deploy.yml` runs on every push to `main`:
 
-- builds the app in `client/` with `adapter-node`,
-- installs **production `node_modules` on the runner** and stages a **self-contained payload**
-  (`build/`, `package.json`, `package-lock.json`, `node_modules/`, `tmp/restart.txt`),
+- builds the app in `client/` with `adapter-node`, **bundling runtime deps (mongoose, …) into
+  `build/`** via `ssr.noExternal` in `vite.config.ts`,
+- stages a **small payload** (`build/`, `package.json`, `package-lock.json`, `tmp/restart.txt`),
 - FTP-uploads it to the app's Application Root, and
 - rewrites `tmp/restart.txt` with changing content so Passenger restarts and picks up the new build.
 
-Because `node_modules` ships from CI, **you never run `npm install` on the server.** All deps are pure
-JS (mongoose, pretty-ms), so a Linux-built `node_modules` is portable to the cPanel host.
+Because the deps are bundled into `build/`, the app runs from `build/` **alone** — there is **no
+`node_modules` to upload** (uploading it over FTP is painfully slow) and **no server-side `npm install`
+required**. `package.json`/`package-lock.json` are shipped only as a fallback so you *can* run `npm i`
+on the server if you ever want to.
 
 The build needs **no secrets** — all config is read at runtime from the Passenger app's environment.
 
@@ -85,20 +87,20 @@ Generate secrets:
 node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 ```
 
-## 4. Dependencies — nothing to do (they ship from CI)
+## 4. Dependencies — nothing to do (they're bundled into `build/`)
 
-You do **not** run "Run NPM Install" on the server. The workflow builds production `node_modules` on the
-runner and FTP-uploads them into the Application Root, so the app is self-contained. After a deploy,
-just **Restart** the app if Passenger didn't auto-restart (it should, via `tmp/restart.txt`).
+You do **not** run "Run NPM Install" on the server. `ssr.noExternal` bundles mongoose & friends straight
+into the `build/` output, so the Application Root only needs `build/` to run. After a deploy, just
+**Restart** the app if Passenger didn't auto-restart (it should, via `tmp/restart.txt`).
 
-> **If you ever do need to install on the server** (e.g. the cPanel "Run NPM Install" button — which
-> only works once `package.json` is in the Application Root): it must run inside the app's Node
+> **Fallback only — if the bundled build ever misbehaves** you can fall back to real `node_modules`:
+> `package.json`/`package-lock.json` are already uploaded, so run the install inside the app's Node
 > virtualenv. cPanel shows the exact command at the top of the Node.js App screen, e.g.
 > ```bash
 > source /home/<USER>/nodevenv/<approot>/22/bin/activate && cd /home/<USER>/<approot>
 > npm install --omit=dev
 > ```
-> Run that in **cPanel → Terminal**. But with this workflow you shouldn't need to.
+> Run that in **cPanel → Terminal**. With this workflow you shouldn't need to.
 
 ## 5. The reminder cron (replaces Vercel cron)
 

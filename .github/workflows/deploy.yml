@@ -32,20 +32,18 @@ jobs:
           npm install
           npm run build
 
-      # Stage a SELF-CONTAINED payload: the compiled server, the manifests, and
-      # production node_modules built here on the (Linux) runner. Shipping
-      # node_modules means there is NO server-side `npm install` step — the
-      # cPanel app just runs `build/index.js` against the deps we send. All of
-      # these deps are pure JS (mongoose, pretty-ms, …), so a Linux-built
-      # node_modules is portable to the cPanel host.
+      # Stage a SMALL payload. Runtime deps (mongoose, …) are bundled INTO
+      # build/ via `ssr.noExternal` in vite.config.ts, so the app runs from
+      # build/ alone — no node_modules to ship (uploading it over FTP is far
+      # too slow) and no server-side `npm install` required. package.json +
+      # package-lock.json are included only as a fallback so you *can* run
+      # `npm i` on the server if you ever need to.
       - name: Stage deploy payload
         run: |
           mkdir -p deploy/tmp
           cp -r client/build deploy/build
           cp client/package.json deploy/package.json
           cp client/package-lock.json deploy/package-lock.json
-          # Production-only install INTO the payload (no dev deps at runtime).
-          npm ci --omit=dev --prefix deploy
           # Write CHANGING content so the FTP delta-sync re-uploads this file
           # (an unchanged file is skipped), refreshing its mtime so Passenger
           # restarts the app and picks up the new build.
@@ -58,12 +56,14 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./deploy/
-          # MUST be the cPanel Node app's "Application Root" so build/index.js,
-          # package.json and node_modules land where Passenger runs the app.
-          # Defaults to the FTP account's home (./); set the FTP_SERVER_DIR
-          # secret to the app root if the account lands somewhere else.
+          # MUST be the cPanel Node app's "Application Root" so build/index.js
+          # lands where Passenger runs the app. Defaults to the FTP account's
+          # home (./); set the FTP_SERVER_DIR secret to the app root if the
+          # account lands somewhere else.
           server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
-          # node_modules IS shipped (above), so it is intentionally NOT excluded.
+          # Never upload node_modules over FTP — far too slow, and not needed
+          # (deps are bundled into build/).
           exclude: |
+            **/node_modules/**
             **/.env
             **/.git/**
