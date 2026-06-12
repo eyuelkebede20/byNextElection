@@ -1,22 +1,26 @@
-name: Deploy to cPanel
+name: Deploy bynextelection.senaycreatives.com
+
+# Till Next Election is ONE SvelteKit app — UI + /api routes are the same Node
+# server. On every push to main we build it with @sveltejs/adapter-node into a
+# standalone build/index.js, then FTP it to the single cPanel Passenger Node app
+# at bynextelection.senaycreatives.com. No frontend/backend split, no node_modules
+# upload (deps are bundled into build/ via ssr.noExternal), no server npm install.
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch: {}   # allow manual re-deploys from the Actions tab
 
-# This app (client/) is a SINGLE SvelteKit SSR app — the UI and its /api routes
-# are the same Node server. We build it with @sveltejs/adapter-node to a
-# standalone `build/index.js` and run it as one cPanel Passenger Node app on
-# bynextelection.senaycreatives.com. There is no separate backend.
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # FTP_SERVER / FTP_USERNAME / FTP_PASSWORD live in this GitHub Environment,
-    # so the job must declare it to read them (otherwise secrets.* are empty).
+    # FTP_SERVER / FTP_USERNAME / FTP_PASSWORD (+ optional FTP_SERVER_DIR) live in
+    # this GitHub Environment; the job must declare it or secrets.* read empty.
     environment: ByNextElection
+
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -24,29 +28,24 @@ jobs:
         with:
           node-version: "22"
 
-      # No build-time env needed: every config value is read at RUNTIME via
-      # $env/dynamic/* from the Passenger app's environment, not baked in here.
-      - name: Build SvelteKit (adapter-node)
+      # No build-time secrets: all config is read at RUNTIME via $env/dynamic/*
+      # from the Passenger app's environment.
+      - name: Build
         working-directory: ./client
         run: |
           npm install
           npm run build
 
-      # Stage a SMALL payload. Runtime deps (mongoose, …) are bundled INTO
-      # build/ via `ssr.noExternal` in vite.config.ts, so the app runs from
-      # build/ alone — no node_modules to ship (uploading it over FTP is far
-      # too slow) and no server-side `npm install` required. package.json +
-      # package-lock.json are included only as a fallback so you *can* run
-      # `npm i` on the server if you ever need to.
-      - name: Stage deploy payload
+      # Assemble the (small) thing we ship: the self-contained build/, plus the
+      # manifests purely as an npm-install fallback, plus a restart trigger.
+      - name: Stage payload
         run: |
           mkdir -p deploy/tmp
-          cp -r client/build deploy/build
-          cp client/package.json deploy/package.json
-          cp client/package-lock.json deploy/package-lock.json
-          # Write CHANGING content so the FTP delta-sync re-uploads this file
-          # (an unchanged file is skipped), refreshing its mtime so Passenger
-          # restarts the app and picks up the new build.
+          cp -r client/build           deploy/build
+          cp client/package.json       deploy/package.json
+          cp client/package-lock.json  deploy/package-lock.json
+          # Changing content forces the FTP delta-sync to re-upload this file,
+          # refreshing its mtime so Passenger restarts and serves the new build.
           echo "restart ${GITHUB_SHA} $(date +%s)" > deploy/tmp/restart.txt
 
       - name: Deploy via FTP
@@ -56,13 +55,12 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./deploy/
-          # MUST be the cPanel Node app's "Application Root" so build/index.js
-          # lands where Passenger runs the app. Defaults to the FTP account's
-          # home (./); set the FTP_SERVER_DIR secret to the app root if the
-          # account lands somewhere else.
+          # Land exactly in the cPanel Node app's "Application Root" (where
+          # Passenger runs build/index.js). Set FTP_SERVER_DIR to that path;
+          # falls back to the FTP account's home if unset.
           server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
-          # Never upload node_modules over FTP — far too slow, and not needed
-          # (deps are bundled into build/).
+          # Don't touch node_modules: never upload one (too slow), and protect
+          # the symlink CloudLinux Node.js Selector keeps in the app root.
           exclude: |
             **/node_modules/**
             **/.env
