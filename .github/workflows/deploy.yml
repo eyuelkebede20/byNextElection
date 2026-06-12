@@ -1,0 +1,62 @@
+name: Deploy to cPanel
+
+on:
+  push:
+    branches:
+      - main
+
+# This app (client/) is a SINGLE SvelteKit SSR app — the UI and its /api routes
+# are the same Node server. We build it with @sveltejs/adapter-node to a
+# standalone `build/index.js` and run it as one cPanel Passenger Node app on
+# bynextelection.senaycreatives.com. There is no separate backend.
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No build-time env needed: every config value is read at RUNTIME via
+      # $env/dynamic/* from the Passenger app's environment, not baked in here.
+      - name: Build SvelteKit (adapter-node)
+        working-directory: ./client
+        run: |
+          npm install
+          npm run build
+
+      # Stage only the runtime artifacts Passenger needs: the compiled server,
+      # and the manifests so cPanel's "Run NPM Install" can install prod deps
+      # on the server (adapter-node externalizes node_modules).
+      - name: Stage deploy payload
+        run: |
+          mkdir -p deploy/tmp
+          cp -r client/build deploy/build
+          cp client/package.json deploy/package.json
+          cp client/package-lock.json deploy/package-lock.json
+          # Write CHANGING content so the FTP delta-sync re-uploads this file
+          # (an unchanged file is skipped), refreshing its mtime so Passenger
+          # restarts the app and picks up the new build.
+          echo "restart ${GITHUB_SHA} $(date +%s)" > deploy/tmp/restart.txt
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./deploy/
+          # Application Root of the cPanel Node app. Defaults to the FTP
+          # account's home (./). Override with an FTP_SERVER_DIR secret if the
+          # account is not jailed directly to the app root.
+          server-dir: ${{ secrets.FTP_SERVER_DIR || './' }}
+          # Protect server-side node_modules (installed via cPanel "Run NPM
+          # Install") and any server-only files from deletion / overwrite.
+          exclude: |
+            **/node_modules/**
+            **/.env
+            **/.git/**
