@@ -44,10 +44,17 @@ jobs:
           cp -r client/build           deploy/build
           cp client/package.json       deploy/package.json
           cp client/package-lock.json  deploy/package-lock.json
-          # Launcher (see client/app.js). cPanel/LiteSpeed lsnode require()s the
-          # startup file; adapter-node's ESM build/index.js has a top-level await
-          # and can't be require()d, so the app's "startup file" is app.js, which
-          # dynamically imports the ESM server. Overwrites cPanel's sample app.js.
+          # cPanel/LiteSpeed lsnode require()s the app entry, but adapter-node's
+          # build/index.js is an ESM graph with a top-level await
+          # (handler.js `await server.init`), which require() can't load
+          # (ERR_REQUIRE_ASYNC_MODULE -> 503). Move the real entry aside and put a
+          # require-safe shim (no top-level await) at build/index.js that
+          # dynamically imports it. This makes the app boot regardless of which
+          # file the cPanel "startup file" actually points at (build/index.js or
+          # app.js) — robust against a stale .htaccess startup-file setting.
+          mv deploy/build/index.js deploy/build/index.real.js
+          printf '%s\n' "import('./index.real.js').catch((err) => { console.error('Failed to start app:', err); process.exit(1); });" > deploy/build/index.js
+          # app.js launcher (same idea, for when the startup file is app.js).
           cp client/app.js             deploy/app.js
           # Changing content forces the FTP delta-sync to re-upload this file,
           # refreshing its mtime so Passenger restarts and serves the new build.

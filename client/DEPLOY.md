@@ -84,10 +84,12 @@ cPanel → **Setup Node.js Application** → **Create Application**:
 
 > ### ⚠️ A **503 Service Unavailable** means the Node app crashed on startup
 > Passenger is now pointed at the app, but the process won't boot. Check, in order:
-> 1. **Application startup file = `app.js`** (not `build/index.js`). A `…lsnode.js Requiring …build/
->    index.js … ERR_REQUIRE_ASYNC_MODULE` error in `stderr.log` means the startup file is still
->    `build/index.js` — LiteSpeed `require()`s it and adapter-node's top-level await makes that illegal.
->    Our `app.js` launcher avoids it. (cPanel rejects a `.cjs` startup file, so it must be `app.js`.)
+> 1. **Startup file can be `app.js` *or* `build/index.js`** — the deploy ships a no-top-level-await
+>    shim at *both* paths (the real adapter-node entry is moved to `build/index.real.js`), so lsnode's
+>    `require()` succeeds either way. If you still see `…lsnode.js Requiring …build/index.js …
+>    ERR_REQUIRE_ASYNC_MODULE` in `stderr.log`, you're running an **old deploy** from before the shim —
+>    re-run the workflow (or re-upload `build/`) and **Restart**. (Note: cPanel rejects a `.cjs` startup
+>    file, which is why the launcher is `app.js`.)
 > 2. **Read the error log.** In the Node.js App screen click **"Open"** next to the log, or in **File
 >    Manager** open `stderr.log` in the Application Root — the last lines show the real stack trace.
 > 3. Make sure `app.js`, `build/`, and our `package.json` (which has `"type": "module"`) are all in the
