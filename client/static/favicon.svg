@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#1f2937"/>
+  <!-- padlock: a sealed message until the next election -->
+  <path d="M11 14v-2.5a5 5 0 0 1 10 0V14" fill="none" stroke="#f9fafb" stroke-width="2.2" stroke-linecap="round"/>
+  <rect x="8.5" y="14" width="15" height="11" rx="2.5" fill="#f9fafb"/>
+  <circle cx="16" cy="19" r="1.9" fill="#1f2937"/>
+  <rect x="15.1" y="19.5" width="1.8" height="3.2" rx="0.9" fill="#1f2937"/>
+</svg>
