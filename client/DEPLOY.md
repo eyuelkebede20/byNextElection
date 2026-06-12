@@ -16,31 +16,54 @@ one cPanel **Passenger Node app** on **`bynextelection.senaycreatives.com`**. Th
 `.github/workflows/deploy.yml` runs on every push to `main`:
 
 - builds the app in `client/` with `adapter-node`,
-- stages the runtime payload (`build/`, `package.json`, `package-lock.json`, `tmp/restart.txt`),
+- installs **production `node_modules` on the runner** and stages a **self-contained payload**
+  (`build/`, `package.json`, `package-lock.json`, `node_modules/`, `tmp/restart.txt`),
 - FTP-uploads it to the app's Application Root, and
 - rewrites `tmp/restart.txt` with changing content so Passenger restarts and picks up the new build.
 
+Because `node_modules` ships from CI, **you never run `npm install` on the server.** All deps are pure
+JS (mongoose, pretty-ms), so a Linux-built `node_modules` is portable to the cPanel host.
+
 The build needs **no secrets** — all config is read at runtime from the Passenger app's environment.
 
-### GitHub repo secrets (Settings → Secrets and variables → Actions)
+### GitHub repo / environment secrets (Settings → Secrets and variables → Actions)
+
+> The workflow job runs in the **`ByNextElection`** GitHub Environment (`environment:` in the YAML), so
+> add these as **environment** secrets under that environment — or as plain repo Actions secrets. Either
+> works as long as the names match.
 
 | Secret           | Value                                                                 |
 | ---------------- | --------------------------------------------------------------------- |
 | `FTP_SERVER`     | The cPanel FTP host (e.g. `senaycreatives.com` or `ftp.senaycreatives.com`) |
 | `FTP_USERNAME`   | The **bynextelection** (main app) FTP account username                |
 | `FTP_PASSWORD`   | That account's password                                               |
-| `FTP_SERVER_DIR` | *Optional.* Defaults to `./` (the FTP account's home). Set only if the account is not jailed directly to the app's Application Root. |
+| `FTP_SERVER_DIR` | *Optional.* Defaults to `./` (the FTP account's home). Set to the app's **Application Root** path if the FTP account lands somewhere else (see step 2). |
 
-## 2. cPanel — Setup the Node app
+## 2. cPanel — Setup the Node app (and align the upload target)
 
 cPanel → **Setup Node.js Application** → **Create Application**:
 
 - **Node version:** 20+
 - **Application mode:** Production
-- **Application root:** the directory the **bynextelection** FTP account lands in (where `build/` and
-  `package.json` will be uploaded)
+- **Application root:** _must be the same directory the deploy uploads into._ This is the single most
+  common failure point — see the box below.
 - **Application URL:** `bynextelection.senaycreatives.com`
-- **Application startup file:** `build/index.js`
+- **Application startup file:** `build/index.js`  ← **not** the default `app.js`
+
+> ### ⚠️ "It works! NodeJS 22.x" is showing instead of the app
+> That page is the **default starter app** (`app.js`) cPanel scaffolds — Passenger is running, but it's
+> running the wrong file from the wrong folder. Fix the two-folder mismatch:
+>
+> 1. In **Setup Node.js Application**, note the app's **Application Root** path.
+> 2. In **cPanel → FTP Accounts → (the bynextelection account) → "Directory"**, note where that FTP
+>    account drops files. Our deploy lands there (`server-dir: ./` = the account's home).
+> 3. **Make these two paths the same.** Easiest: set the app's **Application Root** to the folder that
+>    already contains the uploaded `build/`. (Alternatively, set the `FTP_SERVER_DIR` secret to the
+>    Application Root path and re-run the workflow.)
+> 4. Set **Application startup file** → `build/index.js`, then **Restart** the app.
+>
+> After this, the Application Root should contain: `build/`, `package.json`, `package-lock.json`,
+> `node_modules/`, `tmp/`. You can delete cPanel's leftover sample `app.js`.
 
 ## 3. Environment variables (set in the Node.js App UI → "Environment variables")
 
@@ -62,11 +85,20 @@ Generate secrets:
 node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"
 ```
 
-## 4. Install production dependencies on the server
+## 4. Dependencies — nothing to do (they ship from CI)
 
-The CI ships `package.json`/`package-lock.json` but **not** `node_modules` (adapter-node externalizes
-them). In the Node.js App UI click **"Run NPM Install"** once after the first deploy — and again
-**whenever dependencies change**. Then **Restart** the app.
+You do **not** run "Run NPM Install" on the server. The workflow builds production `node_modules` on the
+runner and FTP-uploads them into the Application Root, so the app is self-contained. After a deploy,
+just **Restart** the app if Passenger didn't auto-restart (it should, via `tmp/restart.txt`).
+
+> **If you ever do need to install on the server** (e.g. the cPanel "Run NPM Install" button — which
+> only works once `package.json` is in the Application Root): it must run inside the app's Node
+> virtualenv. cPanel shows the exact command at the top of the Node.js App screen, e.g.
+> ```bash
+> source /home/<USER>/nodevenv/<approot>/22/bin/activate && cd /home/<USER>/<approot>
+> npm install --omit=dev
+> ```
+> Run that in **cPanel → Terminal**. But with this workflow you shouldn't need to.
 
 ## 5. The reminder cron (replaces Vercel cron)
 
