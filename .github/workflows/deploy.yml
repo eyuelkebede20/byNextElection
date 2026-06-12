@@ -44,10 +44,11 @@ jobs:
           cp -r client/build           deploy/build
           cp client/package.json       deploy/package.json
           cp client/package-lock.json  deploy/package-lock.json
-          # CommonJS launcher (see client/app.cjs). cPanel/LiteSpeed Passenger
-          # can't start an ESM entry file directly, so the app's "startup file"
-          # is app.cjs, which dynamically imports the adapter-node ESM server.
-          cp client/app.cjs            deploy/app.cjs
+          # Launcher (see client/app.js). cPanel/LiteSpeed lsnode require()s the
+          # startup file; adapter-node's ESM build/index.js has a top-level await
+          # and can't be require()d, so the app's "startup file" is app.js, which
+          # dynamically imports the ESM server. Overwrites cPanel's sample app.js.
+          cp client/app.js             deploy/app.js
           # Changing content forces the FTP delta-sync to re-upload this file,
           # refreshing its mtime so Passenger restarts and serves the new build.
           echo "restart ${GITHUB_SHA} $(date +%s)" > deploy/tmp/restart.txt
