@@ -85,3 +85,22 @@ jobs:
             **/node_modules/**
             **/.env
             **/.git/**
+
+      # Re-point the Telegram webhook at our server on every deploy, so a bot
+      # token rotation never silently breaks the Connect flow again. Runs only
+      # if the two secrets are present (add them to the ByNextElection env):
+      #   TELEGRAM_BOT_TOKEN      — the *current* BotFather token
+      #   TELEGRAM_WEBHOOK_SECRET — must equal the app's TELEGRAM_WEBHOOK_SECRET
+      # GitHub masks both in the logs. setWebhook just stores the URL at Telegram;
+      # it doesn't drop pending updates, so in-flight Connects aren't lost.
+      - name: Register Telegram webhook
+        if: ${{ secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_WEBHOOK_SECRET != '' }}
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_WEBHOOK_SECRET: ${{ secrets.TELEGRAM_WEBHOOK_SECRET }}
+        run: |
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
+            --data-urlencode "url=https://bynextelection.senaycreatives.com/api/telegram/webhook" \
+            --data-urlencode "secret_token=${TELEGRAM_WEBHOOK_SECRET}" \
+            --data-urlencode 'allowed_updates=["message"]' \
+            | sed 's/.*\("description":"[^"]*"\).*/\1/'

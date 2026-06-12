@@ -161,12 +161,24 @@ Reminders are opt-in and delivered via a Telegram bot — no email/domain needed
 
 1. In Telegram, talk to **@BotFather** → `/newbot` → pick a name and a `@username`. Copy the **token**
    → `TELEGRAM_BOT_TOKEN`. Put the username (without `@`) in `PUBLIC_TELEGRAM_BOT_USERNAME`.
-2. Choose any random `TELEGRAM_WEBHOOK_SECRET`.
-3. After your first deploy (so the URL is live), register the webhook **once**:
+2. Choose any random `TELEGRAM_WEBHOOK_SECRET` (32+ hex chars, e.g.
+   `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`).
+3. **The webhook is registered automatically by CI.** Add these two as **`ByNextElection` environment
+   secrets** in GitHub (Settings → Environments → ByNextElection), matching the cPanel env values:
+   - `TELEGRAM_BOT_TOKEN` — the current BotFather token
+   - `TELEGRAM_WEBHOOK_SECRET` — **must equal** the app's `TELEGRAM_WEBHOOK_SECRET` env var
+
+   The deploy's **"Register Telegram webhook"** step then re-points the webhook on every push, so a token
+   rotation can never silently break the Connect flow — just update the GitHub secret (and the cPanel env)
+   to the new token and push. To register manually instead (one-off):
 
    ```bash
    curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook?url=https://bynextelection.senaycreatives.com/api/telegram/webhook&secret_token=$TELEGRAM_WEBHOOK_SECRET"
    ```
+
+   > After rotating the token in @BotFather, update **three** places to the new token: the cPanel
+   > `TELEGRAM_BOT_TOKEN` env (Restart), and the GitHub `TELEGRAM_BOT_TOKEN` secret (so CI re-registers).
+   > The `TELEGRAM_WEBHOOK_SECRET` stays the same across token rotations.
 
 How it works: after sealing, the user taps **Connect Telegram**, which opens
 `t.me/<bot>?start=<token>`. Pressing **Start** sends `/start <token>` to the bot; the webhook stamps
