@@ -1,11 +1,11 @@
 # Till Next Election
 
 Write **one** message, seal it for **5 years**, and get a single link. Until the unlock date the
-link shows a live countdown (and is freely shareable); after 5 years the creator gets an email
-reminder and anyone with the link can read the message.
+link shows a live countdown (and is freely shareable). The creator can optionally connect a **Telegram**
+bot; when the 5 years are up the bot messages them the link. Anyone with the link can then read it.
 
 Built on the same stack as [S.M.A](https://sma.robi.work) by [robi](https://github.com/RobiMez):
-SvelteKit + TypeScript + MongoDB + Tailwind v4 / shadcn-svelte.
+SvelteKit + TypeScript + MongoDB + Tailwind v4 / shadcn-svelte. Uses **npm** (not pnpm).
 
 ## How the "lock" works
 
@@ -17,55 +17,57 @@ A true cryptographic 5-year time-lock isn't practical, so the lock is **server-e
 - No endpoint returns the plaintext until `now >= unlockAt`. Before that, the API and page only ever
   expose the unlock date and a countdown.
 
+## Reminders (optional, via Telegram)
+
+No email or sending domain needed. After sealing, the user can tap **Connect Telegram**, which deep-links
+to your bot (`t.me/<bot>?start=<token>`). Pressing **Start** both authorises the bot to DM them and lets
+the webhook (`/api/telegram/webhook`) record their chat id on the locket. The daily cron then messages
+that chat id when the locket unlocks. Skipping it just means no reminder — the link still works.
+
 ## Setup
 
 ```bash
-pnpm i
+npm install
 cp .env.example .env   # then fill it in
-pnpm dev               # http://localhost:5173
+npm run dev            # http://localhost:5173
 ```
 
 ### Environment
 
-| Variable           | Purpose                                                              |
-| ------------------ | -------------------------------------------------------------------- |
-| `SECRET_MONGO_URI` | MongoDB connection string                                            |
-| `LOCKET_SECRET`    | 32+ random bytes; derives AES keys. **Never change it after launch** |
-| `RESEND_API_KEY`   | [Resend](https://resend.com) key for the reminder email              |
-| `LOCKET_FROM_EMAIL`| Verified Resend sender, e.g. `Till Next Election <hi@yourdomain>`     |
-| `CRON_SECRET`      | Guards the reminder endpoint                                         |
-| `PUBLIC_BASE_URL`  | Base URL for links in emails, e.g. `https://tillnextelection.app`    |
+| Variable                       | Purpose                                                              |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `SECRET_MONGO_URI`             | MongoDB connection string                                           |
+| `LOCKET_SECRET`                | 32+ random bytes; derives AES keys. **Never change it after launch** |
+| `TELEGRAM_BOT_TOKEN`           | Bot token from @BotFather                                            |
+| `PUBLIC_TELEGRAM_BOT_USERNAME` | Bot @username without the @ (used for the Connect deep link)         |
+| `TELEGRAM_WEBHOOK_SECRET`      | Random string; must match the webhook's `secret_token`              |
+| `CRON_SECRET`                  | Guards the reminder endpoint                                         |
+| `PUBLIC_BASE_URL`              | Base URL for links in reminders, e.g. `https://tillnextelection.app` |
 
 Generate a secret: `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"`
 
-> If `RESEND_API_KEY` / `LOCKET_FROM_EMAIL` are unset, reminders are logged to the console instead of
-> sent, so local dev works without an email account.
+> If `TELEGRAM_BOT_TOKEN` is unset, reminders are logged to the console instead of sent, so local dev
+> works without a bot. The webhook needs a public HTTPS URL, so Telegram connect only works once deployed.
+
+See **DEPLOY.md** for the full Vercel + BotFather + longevity checklist.
 
 ## Routes
 
-| Route                              | What it does                                                |
-| ---------------------------------- | ----------------------------------------------------------- |
-| `/`                                | Compose + seal a locket; shows the resulting link           |
-| `/l/[token]`                       | Locket page — countdown while locked, message once unlocked |
-| `POST /api/lockets`                | Seal a locket → `{ token, unlockAt }`                       |
-| `GET /api/lockets/[token]`         | Metadata; includes `message` only after unlock              |
-| `GET /api/cron/send-reminders`     | Sends due reminder emails (secret-protected)                |
+| Route                          | What it does                                                |
+| ------------------------------ | ----------------------------------------------------------- |
+| `/`                            | Compose + seal a locket; shows the link + Telegram opt-in   |
+| `/l/[token]`                   | Locket page — countdown while locked, message once unlocked |
+| `POST /api/lockets`            | Seal a locket → `{ token, unlockAt }`                       |
+| `GET /api/lockets/[token]`     | Metadata; includes `message` only after unlock              |
+| `POST /api/telegram/webhook`   | Captures the creator's chat id on `/start <token>`          |
+| `GET /api/cron/send-reminders` | Sends due Telegram reminders (secret-protected)             |
 
 ## The reminder job
 
-There is **no in-process scheduler** (so it works under `adapter-auto` / serverless). Instead, hit the
-endpoint once a day from any external scheduler:
-
-```
-GET https://your-host/api/cron/send-reminders?key=YOUR_CRON_SECRET
-```
-
-The secret may also be passed as an `x-cron-secret` header or `Authorization: Bearer ...`. The job is
-idempotent — it stamps `reminderSentAt`, so repeated calls won't double-send.
-
-- **cron-job.org / EasyCron**: create a daily GET to the URL above.
-- **Vercel**: add a `vercel.json` with a `crons` entry pointing at `/api/cron/send-reminders` and pass
-  the secret via a header.
+No in-process scheduler (so it works on serverless). `vercel.json` declares a daily Vercel cron hitting
+`/api/cron/send-reminders`; since the env var is named `CRON_SECRET`, Vercel auto-sends it as a bearer
+token. The job is idempotent — it stamps `reminderSentAt`, so repeated calls won't double-send. Manual
+trigger: `GET /api/cron/send-reminders?key=$CRON_SECRET`.
 
 ## Testing the time-lock locally
 

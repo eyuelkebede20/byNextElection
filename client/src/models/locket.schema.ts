@@ -9,8 +9,9 @@ const LocketSchema = new mongoose.Schema({
   iv: { type: String, required: true },
   authTag: { type: String, required: true },
 
-  // Creator's address, used only for the unlock reminder.
-  email: { type: String, required: true },
+  // Telegram chat id of the creator, captured when they tap "Connect Telegram"
+  // and press Start on the bot. Null = they opted out of reminders.
+  telegramChatId: { type: String, default: null },
 
   createdAt: { type: Date, default: Date.now },
   unlockAt: { type: Date, required: true },
@@ -27,7 +28,7 @@ export interface ILocket {
   ciphertext: string;
   iv: string;
   authTag: string;
-  email: string;
+  telegramChatId: string | null;
   createdAt: Date;
   unlockAt: Date;
   reminderSentAt: Date | null;

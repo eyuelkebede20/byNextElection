@@ -31,7 +31,6 @@
   "dependencies": {
     "mongoose": "^8.17.2",
     "phosphor-svelte": "^2.0.1",
-    "pretty-ms": "^9.2.0",
-    "resend": "^4.0.0"
+    "pretty-ms": "^9.2.0"
   }
 }

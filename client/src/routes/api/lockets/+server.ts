@@ -7,16 +7,19 @@ import { generateToken } from '$lib/server/token';
 import { unlockDateFrom } from '$lib/utils/duration';
 
 const MAX_MESSAGE_LENGTH = 5000;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Seal a new locket.
  *
- * Body: { message: string, email: string }
+ * Body: { message: string }
  * Returns: { token, unlockAt }  — the plaintext is never echoed back.
+ *
+ * Reminders are opt-in and wired up afterwards: the creator taps "Connect
+ * Telegram", which deep-links to the bot with this token, and the webhook
+ * stamps their chat id onto the locket.
  */
 export const POST: RequestHandler = async ({ request }) => {
-  let body: { message?: unknown; email?: unknown };
+  let body: { message?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -24,16 +27,12 @@ export const POST: RequestHandler = async ({ request }) => {
   }
 
   const message = typeof body.message === 'string' ? body.message.trim() : '';
-  const email = typeof body.email === 'string' ? body.email.trim() : '';
 
   if (!message) {
     return json({ error: 'Message cannot be empty' }, { status: 400 });
   }
   if (message.length > MAX_MESSAGE_LENGTH) {
     return json({ error: `Message exceeds ${MAX_MESSAGE_LENGTH} characters` }, { status: 400 });
-  }
-  if (!EMAIL_RE.test(email)) {
-    return json({ error: 'A valid email is required for the reminder' }, { status: 400 });
   }
 
   await dbConnect();
@@ -52,7 +51,6 @@ export const POST: RequestHandler = async ({ request }) => {
         ciphertext,
         iv,
         authTag,
-        email,
         createdAt,
         unlockAt
       });

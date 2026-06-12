@@ -1,22 +1,25 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
+import { env as privateEnv } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import Locket from '../../../../models/locket.schema';
 import { dbConnect } from '$lib/db';
-import { sendUnlockReminder } from '$lib/server/email';
+import { sendTelegramMessage } from '$lib/server/telegram';
 
 /**
- * Daily reminder job. Trigger it from an external scheduler (cron-job.org,
- * platform cron, etc.) with the shared secret:
+ * Daily reminder job. Trigger it from a scheduler (Vercel cron in vercel.json)
+ * with the shared secret:
  *
  *   GET /api/cron/send-reminders?key=$CRON_SECRET
- *   (or send it as the `x-cron-secret` header / `Authorization: Bearer $CRON_SECRET`)
+ *   (Vercel cron auto-sends `Authorization: Bearer $CRON_SECRET` when the env
+ *    var is named CRON_SECRET; the header / x-cron-secret are also accepted.)
  *
- * Finds lockets that have unlocked but haven't been reminded yet, emails each
- * creator their link, and stamps reminderSentAt so it never double-sends.
+ * Finds lockets that have unlocked, opted into Telegram reminders, and haven't
+ * been reminded yet; messages each creator their link via the bot and stamps
+ * reminderSentAt so it never double-sends.
  */
 export const GET: RequestHandler = async ({ url, request }) => {
-  if (!env.CRON_SECRET) {
+  if (!privateEnv.CRON_SECRET) {
     return json({ error: 'CRON_SECRET is not configured' }, { status: 500 });
   }
 
@@ -26,17 +29,18 @@ export const GET: RequestHandler = async ({ url, request }) => {
     request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
     '';
 
-  if (provided !== env.CRON_SECRET) {
+  if (provided !== privateEnv.CRON_SECRET) {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   await dbConnect();
 
-  const baseUrl = (env.PUBLIC_BASE_URL ?? url.origin).replace(/\/$/, '');
+  const baseUrl = (publicEnv.PUBLIC_BASE_URL ?? url.origin).replace(/\/$/, '');
 
   const due = await Locket.find({
     unlockAt: { $lte: new Date() },
-    reminderSentAt: null
+    reminderSentAt: null,
+    telegramChatId: { $ne: null }
   });
 
   let sent = 0;
@@ -44,8 +48,9 @@ export const GET: RequestHandler = async ({ url, request }) => {
 
   for (const locket of due) {
     const link = `${baseUrl}/l/${locket.token}`;
+    const text = `🔓 It's time. The locket you sealed five years ago can be opened now:\n${link}`;
     try {
-      await sendUnlockReminder(locket.email, link);
+      await sendTelegramMessage(locket.telegramChatId, text);
       locket.reminderSentAt = new Date();
       await locket.save();
       sent++;
