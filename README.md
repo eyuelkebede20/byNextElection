@@ -54,7 +54,7 @@ before `now >= unlockAt`. See [`client/README.md`](client/README.md) for the tec
 | Compose & seal a message | `docs/screenshots/compose.png` |
 | The link + Telegram opt-in | `docs/screenshots/sealed.png` |
 | Locked locket (countdown) | `docs/screenshots/countdown.png` |
-| Unlocked locket (your message) | `docs/screenshots/unlocked.png` |
+| Unlocked locket (your message) | _find out in 5 years :)_ |
 | Telegram reminder | `docs/screenshots/telegram.png` |
 
 <!--
@@ -63,7 +63,6 @@ Once the files are in docs/screenshots/, replace the table above (or add below) 
 ![Compose & seal](docs/screenshots/compose.png)
 ![Sealed — link + Telegram](docs/screenshots/sealed.png)
 ![Locked — countdown](docs/screenshots/countdown.png)
-![Unlocked — your message](docs/screenshots/unlocked.png)
 ![Telegram reminder](docs/screenshots/telegram.png)
 -->
 
