@@ -1,4 +1,4 @@
-# Till Next Election
+# By/Till Next Election
 
 **A locket for your future self.** Write down what you want to accomplish, seal it for **5 years —
 roughly one election cycle — and come back to find out whether you actually did it.**
